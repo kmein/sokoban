@@ -1,5 +1,5 @@
 name:                sokoban
-version:             0.1.0.0
+version:             0.2.4
 synopsis:            Initial project template from stack
 description:         Please see README.md
 homepage:            https://github.com/kmein/sokoban#readme
@@ -8,15 +8,23 @@ license-file:        LICENSE
 author:              Kierán Meinhardt
 maintainer:          kieran.meinhardt@gmail.com
 copyright:           (C) Kierán Meinhardt 2016
-category:            Web
+category:            Game
 build-type:          Simple
--- extra-source-files:
 cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Lib
+  exposed-modules:     Game.Sokoban
+                     , Game.Sokoban.Console
+                     , Game.Sokoban.Gtk
+                     , Game.Sokoban.Levels
+                     , Game.Sokoban.Types
   build-depends:       base >= 4.7 && < 5
+                     , cairo
+                     , containers
+                     , gtk
+                     , linear
+                     , mtl
   default-language:    Haskell2010
 
 executable sokoban-exe

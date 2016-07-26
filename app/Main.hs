@@ -1,6 +1,7 @@
 module Main where
 
-import Lib
+import qualified Game.Sokoban.Console as Console (main)
+import qualified Game.Sokoban.Gtk as Gtk (main)
 
 main :: IO ()
-main = someFunc
+main = Gtk.main
