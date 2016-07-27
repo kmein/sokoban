@@ -15,3 +15,9 @@ The original idea came from [Ruby Quiz #5 –
 Sokoban](http://rubyquiz.com/quiz5.html). And the recorded live
 coding session of the original code can be found at [Haskell
 Uncut](https://youtube.com/user/entirelysubjective).
+
+## How to play
+* move the character and crates using the arrow keys
+* undo your move with `u`
+* reset the level with `r`
+* quit the game with `q`
