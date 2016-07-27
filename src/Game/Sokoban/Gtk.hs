@@ -18,16 +18,10 @@ data GameState
    , stateUndo :: Seq World
    }
 
-initialGameState :: GameState
-initialGameState =
-    GameState
-    { stateWorld = loadWorld $ level 1
-    , stateUndo = empty
-    }
-
-main :: IO ()
-main =
+mainWith :: Word -> IO ()
+mainWith idx =
     do initGUI
+       let initialGameState = GameState (loadWorld $ levels !! fromIntegral (idx - 1)) empty
        state <- newIORef initialGameState
        tiles <- loadTiles
            [ "character-boy"
@@ -40,20 +34,20 @@ main =
            ]
        window <- windowNew
        window `on` sizeRequest $ return (Requisition 800 600)
-       window `on` keyPressEvent $ handleKeyboard window state
+       window `on` keyPressEvent $ handleKeyboard window state initialGameState
        window `on` exposeEvent $ drawScene window state tiles
        onDestroy window mainQuit
        widgetShowAll window
        mainGUI
 
-handleKeyboard :: (WidgetClass window) => window -> IORef GameState -> EventM EKey Bool
-handleKeyboard window state =
+handleKeyboard :: (WidgetClass window) => window -> IORef GameState -> GameState -> EventM EKey Bool
+handleKeyboard window state initialGameState =
     tryEvent $
     do kv <- liftIO . keyvalName =<< eventKeyVal
        liftIO $
            do case kv of
                 "u" -> undo state
-                "r" -> reset state
+                "r" -> writeIORef state initialGameState
                 "q" ->
                     do st <- readIORef state
                        checkQuit <- messageDialogNew Nothing [DialogModal] MessageWarning ButtonsYesNo
@@ -82,7 +76,7 @@ drawScene window state tiles =
                   imgWall = tiles M.! "stone-block"
                   imgStorage = tiles M.! "selector"
                   imgCrate = tiles M.! "gem-blue"
-              C.scale 0.5 0.5
+              C.scale 0.4 0.4
               drawImage imgWorker (worker world)
               forM_ (walls world) $ drawImage imgWall
               forM_ (storage world)  $ drawImage imgStorage
@@ -95,7 +89,7 @@ drawScene window state tiles =
            -- tiles are 100x85
           do Requisition width height <- liftIO $ widgetSizeRequest window
              let centerPoint (V2 x y) =
-                     ( fromIntegral x * 100 + 0.5 * fromIntegral width
+                     ( fromIntegral x * 100 + 0.125 * fromIntegral width
                      , 1.5 * fromIntegral height - fromIntegral y * 85
                      )
              uncurry (C.setSourceSurface img) $ centerPoint offset
@@ -127,6 +121,3 @@ undo state =
         case viewl prev of
           EmptyL -> s
           (w :< ws) -> GameState w ws
-
-reset :: IORef GameState -> IO ()
-reset state = writeIORef state initialGameState

@@ -3,7 +3,7 @@
 module Game.Sokoban.Console where
 
 import Game.Sokoban
-import Game.Sokoban.Levels (level)
+import Game.Sokoban.Levels (levels)
 
 import Control.Monad.State (evalStateT, get, gets, liftIO, unless)
 import System.IO (BufferMode(NoBuffering), hSetBuffering, hSetEcho, stdin, stdout)
@@ -32,10 +32,10 @@ gameLoop =
                   liftIO $ putStrLn $ "You win after " ++ show elapsed ++ " steps!"
           else gameLoop
 
-main :: IO ()
-main =
+mainWith :: Word -> IO ()
+mainWith idx =
     do hSetEcho stdin False
        hSetBuffering stdin NoBuffering
        hSetBuffering stdout NoBuffering
-       evalStateT gameLoop $ loadWorld $ level 1
+       evalStateT gameLoop $ loadWorld $ levels !! fromIntegral (idx - 1)
 
