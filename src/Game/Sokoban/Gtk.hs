@@ -5,7 +5,6 @@ import Game.Sokoban
 import Game.Sokoban.Levels
 
 import Control.Monad.State (MonadIO(..), execStateT, foldM, forM_, gets, when)
--- import Control.Concurrent.IORef
 import Data.IORef
 import qualified Data.Map as M (Map, (!), empty, fromList, insert)
 import Data.Sequence
@@ -16,14 +15,14 @@ import Linear.V2 (V2(..))
 data GameState
    = GameState
    { stateWorld :: World
-   , statePrevious :: Seq World
+   , stateUndo :: Seq World
    }
 
 initialGameState :: GameState
 initialGameState =
     GameState
     { stateWorld = loadWorld $ level 1
-    , statePrevious = empty
+    , stateUndo = empty
     }
 
 main :: IO ()
@@ -57,7 +56,7 @@ handleKeyboard window state =
                 "r" -> reset state
                 "q" ->
                     do st <- readIORef state
-                       checkQuit <- messageDialogNew Nothing [DialogModal] MessageWarning ButtonsYesNo $
+                       checkQuit <- messageDialogNew Nothing [DialogModal] MessageWarning ButtonsYesNo
                            ("Do you really want to quit?" :: String)
                        quitResponse <- dialogRun checkQuit
                        when (quitResponse == ResponseYes) $
@@ -88,7 +87,8 @@ drawScene window state tiles =
               forM_ (walls world) $ drawImage imgWall
               forM_ (storage world)  $ drawImage imgStorage
               forM_ (crates world) $ drawImage imgCrate
-       stepLabel <- labelNew . Just . show $ steps world
+       -- stepLabel <- labelNew (Nothing :: Maybe String)
+       -- labelSetText stepLabel $ show (steps world)
        return True
     where
       drawImage img offset =
@@ -119,7 +119,7 @@ updateWorld state move =
                          "Congratulations!\n\nYou won in " ++ show step ++ " steps."
                      ResponseOk <- dialogRun alert
                      mainQuit
-       modifyIORef' state $ \s -> s { stateWorld = wld', statePrevious = wld <| prev }
+       modifyIORef' state $ \s -> s { stateWorld = wld', stateUndo = wld <| prev }
 
 undo :: IORef GameState -> IO ()
 undo state =
