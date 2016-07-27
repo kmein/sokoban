@@ -5,19 +5,31 @@ import Game.Sokoban
 import Game.Sokoban.Levels
 
 import Control.Monad.State (MonadIO(..), execStateT, foldM, forM_, gets, when)
-import Control.Concurrent.MVar
-import Data.Map (Map, (!), empty, fromList, insert)
+-- import Control.Concurrent.IORef
+import Data.IORef
+import qualified Data.Map as M (Map, (!), empty, fromList, insert)
+import Data.Sequence
 import Graphics.Rendering.Cairo as C
 import Graphics.UI.Gtk
 import Linear.V2 (V2(..))
 
+data GameState
+   = GameState
+   { stateWorld :: World
+   , statePrevious :: Seq World
+   }
+
+initialGameState :: GameState
 initialGameState =
-    loadWorld $ level 1
+    GameState
+    { stateWorld = loadWorld $ level 1
+    , statePrevious = empty
+    }
 
 main :: IO ()
 main =
     do initGUI
-       state <- newMVar initialGameState
+       state <- newIORef initialGameState
        tiles <- loadTiles
            [ "character-boy"
            , "gem-blue"
@@ -35,60 +47,86 @@ main =
        widgetShowAll window
        mainGUI
 
-handleKeyboard :: (WidgetClass window) => window -> MVar World -> EventM EKey Bool
+handleKeyboard :: (WidgetClass window) => window -> IORef GameState -> EventM EKey Bool
 handleKeyboard window state =
     tryEvent $
     do kv <- liftIO . keyvalName =<< eventKeyVal
        liftIO $
-           do updateWorld state $ case kv of
-                "Left" -> Just left
-                "Right" -> Just right
-                "Down" -> Just down
-                "Up" -> Just up
-                _ -> Nothing
+           do case kv of
+                "u" -> undo state
+                "r" -> reset state
+                "q" ->
+                    do st <- readIORef state
+                       checkQuit <- messageDialogNew Nothing [DialogModal] MessageWarning ButtonsYesNo $
+                           ("Do you really want to quit?" :: String)
+                       quitResponse <- dialogRun checkQuit
+                       when (quitResponse == ResponseYes) $
+                           do alert <- messageDialogNew Nothing [DialogModal] MessageInfo ButtonsOk $
+                                  "You quit after " ++ show (steps $ stateWorld st) ++ " steps."
+                              ResponseOk <- dialogRun alert
+                              mainQuit
+                "Left" -> updateWorld state left
+                "Right" -> updateWorld state right
+                "Down" -> updateWorld state down
+                "Up" -> updateWorld state up
+                _ -> return ()
               widgetQueueDraw window
 
-drawScene :: (WidgetClass window, MonadIO m) => window -> MVar World -> Map String Surface -> m Bool
+
+drawScene :: (WidgetClass window, MonadIO m) => window -> IORef GameState -> M.Map String Surface -> m Bool
 drawScene window state tiles =
     liftIO $
     do cr <- widgetGetDrawWindow window
-       world <- readMVar state
+       GameState world _ <- readIORef state
        renderWithDrawable cr $
-           do let imgWorker = tiles ! "character-boy"
-                  imgWall = tiles ! "stone-block"
-                  imgStorage = tiles ! "selector"
-                  imgCrate = tiles ! "gem-blue"
-              C.scale 0.4 0.4
+           do let imgWorker = tiles M.! "character-boy"
+                  imgWall = tiles M.! "stone-block"
+                  imgStorage = tiles M.! "selector"
+                  imgCrate = tiles M.! "gem-blue"
+              C.scale 0.5 0.5
               drawImage imgWorker (worker world)
               forM_ (walls world) $ drawImage imgWall
               forM_ (storage world)  $ drawImage imgStorage
               forM_ (crates world) $ drawImage imgCrate
+       stepLabel <- labelNew . Just . show $ steps world
        return True
     where
-      drawImage img (V2 x y) =
+      drawImage img offset =
            -- tiles are 100x85
           do Requisition width height <- liftIO $ widgetSizeRequest window
-             C.setSourceSurface img (fromIntegral x * 100 + 0.5*fromIntegral width) (1.5*fromIntegral height - fromIntegral y * 85)
+             let centerPoint (V2 x y) =
+                     ( fromIntegral x * 100 + 0.5 * fromIntegral width
+                     , 1.5 * fromIntegral height - fromIntegral y * 85
+                     )
+             uncurry (C.setSourceSurface img) $ centerPoint offset
              C.paint
 
-loadTiles :: [String] -> IO (Map String Surface)
-loadTiles = foldM addSurface empty
+loadTiles :: [String] -> IO (M.Map String Surface)
+loadTiles = foldM addSurface M.empty
     where
       addSurface kvs path =
           do surface <- C.imageSurfaceCreateFromPNG ("img/" ++ path ++ ".png")
-             return $ insert path surface kvs
+             return $ M.insert path surface kvs
 
-updateWorld :: MVar World -> Maybe Move -> IO ()
+updateWorld :: IORef GameState -> Move -> IO ()
 updateWorld state move =
-    do wld <- readMVar state
+    do GameState wld prev <- readIORef state
        wld' <- flip execStateT wld $
-           do mapM_ applyMove move
+           do applyMove move
               finished <- isFinished
               when finished $ gets steps >>= \step -> liftIO $
-                  do alert <- messageDialogNew Nothing [DialogModal] MessageInfo ButtonsOk $ "Congratulations!\n\nYou won in " ++ show step ++ " steps."
+                  do alert <- messageDialogNew Nothing [DialogModal] MessageInfo ButtonsOk $
+                         "Congratulations!\n\nYou won in " ++ show step ++ " steps."
                      ResponseOk <- dialogRun alert
                      mainQuit
-       modifyMVar_ state $ \s -> return wld'
+       modifyIORef' state $ \s -> s { stateWorld = wld', statePrevious = wld <| prev }
 
+undo :: IORef GameState -> IO ()
+undo state =
+    modifyIORef' state $ \s@(GameState wld prev) ->
+        case viewl prev of
+          EmptyL -> s
+          (w :< ws) -> GameState w ws
 
-
+reset :: IORef GameState -> IO ()
+reset state = writeIORef state initialGameState
